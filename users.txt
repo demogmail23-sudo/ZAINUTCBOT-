@@ -1,0 +1,11 @@
+# Flash_ff Free Fire Bot Credentials
+# Fill in your Free Fire account credentials below
+
+# Format 1: Comma-separated (RECOMMENDED)
+uid=4448096141,password=D507D90930F705F01280BECF73520345A25A754D8E9D6F4BCB400C7E620105C3
+
+# OR Format 2: Line-separated
+# uid: 4448096141
+# password: D507D90930F705F01280BECF73520345A25A754D8E9D6F4BCB400C7E620105C3
+
+# Save this file and restart the bot
