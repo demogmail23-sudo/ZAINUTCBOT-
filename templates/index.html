@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Master Panel | {{ session['user'] }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --neon-orange: #f97316;
+            --neon-blue: #00f3ff;
+            --neon-green: #4ade80;
+            --neon-red: #f87171;
+        }
+        body { background-color: #050505; font-family: 'Rajdhani', sans-serif; color: #ffffff; overflow-x: hidden; }
+        
+        @keyframes rgb-glow {
+            0% { border-color: var(--neon-orange); box-shadow: 0 0 5px var(--neon-orange); }
+            33% { border-color: var(--neon-blue); box-shadow: 0 0 5px var(--neon-blue); }
+            66% { border-color: var(--neon-green); box-shadow: 0 0 5px var(--neon-green); }
+            100% { border-color: var(--neon-orange); box-shadow: 0 0 5px var(--neon-orange); }
+        }
+
+        .card-bg { 
+            background: rgba(22, 22, 22, 0.8); 
+            border-radius: 15px; 
+            border: 1px solid #252525; 
+            margin-bottom: 12px; 
+            backdrop-filter: blur(10px);
+            transition: 0.3s;
+        }
+        .card-bg:hover { animation: rgb-glow 3s infinite linear; }
+
+        /* Sidebar Flex Layout for Developer Info */
+        .sidebar { position: fixed; left: -100%; top: 0; width: 280px; height: 100%; background: #0f0f11; z-index: 1000; transition: 0.4s; border-right: 2px solid var(--neon-orange); box-shadow: 5px 0 15px rgba(249, 115, 22, 0.2); display: flex; flex-direction: column; }
+        .sidebar.active { left: 0; }
+        .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 999; backdrop-filter: blur(4px); }
+        .overlay.active { display: block; }
+
+        .btn-op { padding: 10px; border-radius: 8px; font-weight: bold; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 5px; transition: 0.3s; width: 100%; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
+        .btn-start { background: rgba(13, 46, 33, 0.5); color: #4ade80; border: 1px solid #14532d; }
+        .btn-start:hover { background: #14532d; box-shadow: 0 0 15px var(--neon-green); }
+        .btn-stop { background: rgba(36, 22, 22, 0.5); color: #f87171; border: 1px solid #451a1a; }
+        .btn-stop:hover { background: #451a1a; box-shadow: 0 0 15px var(--neon-red); }
+        .btn-restart { background: rgba(61, 38, 30, 0.5); color: #fb923c; border: 1px solid #7c2d12; }
+        .btn-restart:hover { background: #7c2d12; box-shadow: 0 0 15px #fb923c; }
+        .btn-force { background: #2d1a1a; color: #fca5a5; border: 1px solid #451a1a; }
+        .btn-util { background: #1a1a1c; color: #94a3b8; border: 1px solid #333; }
+        .btn-util:hover { border-color: var(--neon-blue); color: var(--neon-blue); }
+
+        #toast { position: fixed; top: -100px; left: 50%; transform: translateX(-50%); background: #111; padding: 12px 25px; border-radius: 30px; border: 2px solid var(--neon-orange); z-index: 2000; transition: 0.5s; color: var(--neon-orange); font-size: 13px; font-weight: bold; }
+        #toast.show { top: 40px; }
+
+        .active-tab { color: var(--neon-orange) !important; background: rgba(249, 115, 22, 0.1); border-left: 4px solid var(--neon-orange); }
+        .console-box { background: #000; border-radius: 0 0 15px 15px; padding: 15px; height: 300px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 11px; color: #00ff00; border-top: 1px solid #252525; }
+        
+        input, select { background: #0a0a0c !important; border: 1px solid #252525 !important; color: white !important; outline: none; }
+        .rgb-text { background: linear-gradient(90deg, #f97316, #00f3ff, #4ade80); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    </style>
+</head>
+<body>
+
+    <div id="toast">SYSTEM ONLINE</div>
+    <div id="overlay" class="overlay" onclick="toggleMenu()"></div>
+
+    <div id="sidebar" class="sidebar p-6">
+        <div class="flex items-center gap-3 mb-10 border-b border-white/5 pb-4">
+            <span class="text-orange-500 text-3xl animate-pulse">🤖</span>
+            <h1 class="text-2xl font-bold">ZAINU TCP</h1>
+        </div>
+        <nav class="space-y-4 flex-1">
+            <div onclick="showPage('control')" class="p-4 rounded-xl active-tab cursor-pointer" id="m-control">🎮 Control Panel</div>
+            <div onclick="showPage('accounts')" class="p-4 rounded-xl text-gray-400 cursor-pointer" id="m-accounts">👥 Accounts</div>
+            <div onclick="showPage('friends')" class="p-4 rounded-xl text-gray-400 cursor-pointer" id="m-friends">👤 Friends</div>
+            <div onclick="showPage('clan')" class="p-4 rounded-xl text-gray-400 cursor-pointer" id="m-clan">🛡️ Clan Search</div>
+            <div onclick="showPage('admin')" class="p-4 rounded-xl text-gray-400 cursor-pointer" id="m-admin">🛠️ Admin Panel</div>
+            <div onclick="window.location.href='/logout'" class="p-4 rounded-xl text-red-500 cursor-pointer border border-red-900/20 mt-4">🚪 Logout</div>
+        </nav>
+
+        <div class="mt-auto pt-6 border-t border-white/5">
+            <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-2">Developed By</p>
+            <h2 class="text-xl font-bold rgb-text mb-4">ZAINU BHAI</h2>
+            <div class="grid grid-cols-2 gap-2">
+                <a href="https://youtube.com/@ZAINUBHAIFF" target="_blank" class="flex items-center justify-center gap-2 p-2 rounded-lg bg-red-600/10 border border-red-600/20 hover:bg-red-600/20 transition">
+                    <span class="text-red-500 text-sm">▶</span>
+                    <span class="text-[10px] font-bold uppercase">YouTube</span>
+                </a>
+                <a href="https://t.me/ZAINUBHAI" target="_blank" class="flex items-center justify-center gap-2 p-2 rounded-lg bg-blue-600/10 border border-blue-600/20 hover:bg-blue-600/20 transition">
+                    <span class="text-blue-400 text-sm">✈</span>
+                    <span class="text-[10px] font-bold uppercase">Telegram</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <header class="p-5 flex justify-between items-center sticky top-0 z-50 bg-[#0d0d0d]/90 backdrop-blur-md border-b border-white/5">
+        <div class="flex items-center gap-4">
+            <button onclick="toggleMenu()" class="text-2xl text-orange-500">☰</button>
+            <h1 id="page-title" class="text-xl font-bold flex items-center gap-2 uppercase tracking-tighter">⚡ Control Panel</h1>
+        </div>
+        <div class="flex flex-col items-end">
+            <span class="text-[10px] text-orange-500 font-bold uppercase tracking-widest">{{ session['user'] }}</span>
+            <span class="text-[8px] text-gray-500">V2.0-STABLE</span>
+        </div>
+    </header>
+
+    <main class="p-4 max-w-xl mx-auto">
+        
+        <div id="page-control" class="space-y-3">
+            <div class="card-bg p-4 flex justify-between items-center">
+                <div>
+                    <p class="text-[10px] text-gray-500 font-bold uppercase">Bot Status</p>
+                    <span id="stext" class="text-red-500 text-xs font-bold uppercase">Stopped</span>
+                </div>
+                <div class="p-2 bg-black rounded-lg text-red-500">🗣️</div>
+            </div>
+
+            <div class="card-bg p-4 flex justify-between items-center">
+                <div>
+                    <p class="text-[10px] text-gray-500 font-bold uppercase">Session Time</p>
+                    <h3 id="timer-display" class="text-xl font-bold font-mono">0h 0m 0s</h3>
+                </div>
+                <div class="p-2 bg-black rounded-lg text-cyan-500">🕒</div>
+            </div>
+
+            <div class="card-bg overflow-hidden">
+                <div class="p-4 border-b border-white/5 flex justify-between items-center bg-white/5">
+                    <h3 class="text-xs font-bold uppercase">🎮 Operations</h3>
+                </div>
+                <div class="p-4 grid grid-cols-3 gap-2">
+                    <button onclick="control('start')" class="btn-op btn-start">▶ Start</button>
+                    <button onclick="control('stop')" class="btn-op btn-stop">■ Stop</button>
+                    <button onclick="control('restart')" class="btn-op btn-restart">🔄 Restart</button>
+                </div>
+                <div class="px-4 pb-4 grid grid-cols-3 gap-2">
+                    <button onclick="msg('FORCE KILL SENT')" class="btn-op btn-force">🚫 Force Kill</button>
+                    <button onclick="document.getElementById('logs').innerHTML=''" class="btn-op btn-util">🗑 Clear</button>
+                    <button onclick="msg('AUTO SCROLL ENABLED')" class="btn-op btn-util">↕ Scroll</button>
+                </div>
+                <div id="logs" class="console-box">Console Ready for {{ session['user'] }}...</div>
+            </div>
+        </div>
+
+        <div id="page-accounts" class="hidden space-y-4">
+            <div class="card-bg p-6 border-t-2 border-orange-500">
+                <h3 class="text-orange-500 font-bold mb-4 uppercase text-xs">Bot Login Configuration</h3>
+                <input id="name" type="text" placeholder="Bot Nickname" class="w-full p-4 rounded-xl mb-3">
+                <input id="uid" type="text" placeholder="Player UID" class="w-full p-4 rounded-xl mb-3">
+                <input id="pw" type="password" placeholder="Password" class="w-full p-4 rounded-xl mb-4">
+                <button onclick="saveAcc()" class="btn-op bg-orange-600 text-white p-4">SAVE CONFIG</button>
+            </div>
+        </div>
+
+        <div id="page-friends" class="hidden space-y-4">
+            <div class="card-bg p-6 border-t-2 border-cyan-500">
+                <div class="flex gap-2 mb-4 bg-black p-1 rounded-xl">
+                    <button onclick="tabFriend('check')" id="tab-check" class="flex-1 py-2 rounded-lg bg-orange-600 text-xs font-bold">LIST</button>
+                    <button onclick="tabFriend('add')" id="tab-add" class="flex-1 py-2 rounded-lg text-gray-500 text-xs font-bold">ADD</button>
+                </div>
+                <div id="sec-check" class="space-y-3">
+                    <button onclick="fetchFriendList()" class="w-full bg-cyan-600/10 text-cyan-400 p-4 rounded-xl text-xs font-bold border border-cyan-900/20">FETCH LIST</button>
+                    <div id="nickname-list" class="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto"></div>
+                </div>
+                <div id="sec-add" class="hidden space-y-3">
+                    <input id="target-uid" type="text" placeholder="Target UID" class="w-full p-4 rounded-xl">
+                    <button onclick="addFriend()" class="btn-op bg-orange-600 text-white">SEND REQUEST</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="page-clan" class="hidden space-y-4">
+            <div class="card-bg p-6 border-t-2 border-green-500">
+                <h3 class="text-orange-500 font-bold mb-4 uppercase text-xs">🛡️ Clan Search</h3>
+                <input id="guild-id" type="text" placeholder="Enter Guild ID" class="w-full p-4 rounded-xl mb-3">
+                <select id="region" class="w-full p-4 rounded-xl text-sm mb-3">
+                    <option value="ind">India (IND)</option>
+                    <option value="bd">Bangladesh (BD)</option>
+                    <option value="sg">Singapore (SG)</option>
+                    <option value="pk">Pakistan (PK)</option>
+                </select>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="guildApi('info')" class="btn-op btn-util">INFO</button>
+                    <button onclick="guildApi('members')" class="btn-op btn-util">MEMBERS</button>
+                    <button onclick="guildApi('join')" class="btn-op btn-util text-green-500">JOIN</button>
+                    <button onclick="guildApi('leave')" class="btn-op btn-util text-red-500">LEAVE</button>
+                </div>
+            </div>
+            <div id="clan-result" class="card-bg p-4 min-h-[100px] text-xs font-mono text-gray-400"></div>
+        </div>
+
+        <div id="page-admin" class="hidden space-y-4">
+            <div class="card-bg p-6 border-t-2 border-purple-500">
+                <h3 class="text-orange-500 font-bold mb-4 uppercase text-xs">🛠️ Master Admin</h3>
+                <div id="admin-login-sec">
+                    <input id="adm-pw" type="password" placeholder="Admin Passkey" class="w-full p-4 rounded-xl mb-3 text-center tracking-widest">
+                    <button onclick="adminAction()" class="btn-op bg-white/5 text-orange-500 border border-orange-500/30">LOGIN ADMIN</button>
+                </div>
+                <div id="admin-config-sec" class="hidden space-y-5">
+                    <div class="p-4 bg-black rounded-2xl border border-white/5">
+                        <p class="text-[9px] text-gray-500 uppercase mb-2">Global Duration: <span id="current-global-time" class="text-cyan-500">--</span>m</p>
+                        <div class="flex gap-2">
+                            <input id="new-duration" type="number" placeholder="Minutes" class="w-2/3 rounded-lg p-2 text-xs">
+                            <button onclick="saveGlobal()" class="w-1/3 bg-orange-600 rounded-lg text-[10px] font-bold">SET</button>
+                        </div>
+                    </div>
+                    <div id="active-user-list" class="space-y-2 max-h-60 overflow-y-auto"></div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        const socket = io();
+        let countdown;
+        const currentSessionUser = "{{ session['user'] }}";
+
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('active');
+            document.getElementById('overlay').classList.toggle('active');
+        }
+
+        function showPage(p) {
+            ['control', 'accounts', 'friends', 'clan', 'admin'].forEach(pg => {
+                document.getElementById('page-'+pg).classList.add('hidden');
+                document.getElementById('m-'+pg).classList.remove('active-tab');
+            });
+            document.getElementById('page-'+p).classList.remove('hidden');
+            document.getElementById('m-'+p).classList.add('active-tab');
+            document.getElementById('page-title').innerText = '⚡ ' + p.toUpperCase();
+            if(window.innerWidth < 1024) toggleMenu();
+        }
+
+        function tabFriend(type) {
+            document.getElementById('sec-check').classList.toggle('hidden', type !== 'check');
+            document.getElementById('sec-add').classList.toggle('hidden', type !== 'add');
+        }
+
+        function msg(t) {
+            const e = document.getElementById('toast'); e.innerText = t; e.classList.add('show');
+            setTimeout(() => e.classList.remove('show'), 3000);
+        }
+
+        function saveAcc() {
+            const name = document.getElementById('name').value, uid = document.getElementById('uid').value, pw = document.getElementById('pw').value;
+            if(!name || !uid || !pw) return msg("FILL ALL FIELDS!");
+            localStorage.setItem('bot_name', name); localStorage.setItem('bot_uid', uid); localStorage.setItem('bot_pw', pw);
+            msg("CONFIG SAVED LOCALLY!");
+        }
+
+        async function control(act) {
+            const bot_name = localStorage.getItem('bot_name') || currentSessionUser;
+            const uid = localStorage.getItem('bot_uid');
+            const pw = localStorage.getItem('bot_pw');
+            
+            try {
+                const res = await fetch('/api/control', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({action: act, name: bot_name, uid: uid, password: pw}) 
+                });
+                const d = await res.json();
+                msg(d.message || d.status);
+                if(d.status === 'success') updateStat(d.running, d.rem_sec);
+            } catch(e) { msg("CONNECTION ERROR"); }
+        }
+
+        function updateStat(run, rem = 0) {
+            const el = document.getElementById('stext');
+            el.innerText = run ? "Running" : "Stopped";
+            el.className = run ? "text-green-500 text-xs font-bold uppercase" : "text-red-500 text-xs font-bold uppercase";
+            if(run) startTimer(Math.floor(rem));
+            else { clearInterval(countdown); document.getElementById('timer-display').innerText = "0h 0m 0s"; }
+        }
+
+        function startTimer(sec) {
+            clearInterval(countdown);
+            if(sec <= 0 && sec !== -1) return;
+            function update() {
+                if(sec === -1) { document.getElementById('timer-display').innerText = "Unlimited"; return; }
+                if(sec <= 0) { clearInterval(countdown); updateStat(false); return; }
+                let h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+                document.getElementById('timer-display').innerText = `${h}h ${m}m ${s}s`;
+                sec--;
+            }
+            update(); countdown = setInterval(update, 1000);
+        }
+
+        async function guildApi(type) {
+            const gid = document.getElementById('guild-id').value, reg = document.getElementById('region').value;
+            const uid = localStorage.getItem('bot_uid'), pw = localStorage.getItem('bot_pw');
+            const resBox = document.getElementById('clan-result');
+            if(!gid) return msg("ENTER GUILD ID!");
+            resBox.innerHTML = "Fetching...";
+            try {
+                const response = await fetch(`/api/proxy_guild?type=${type}&guild_id=${gid}&region=${reg}&uid=${uid}&password=${pw}`);
+                const data = await response.json();
+                resBox.innerHTML = JSON.stringify(data, null, 2);
+            } catch (e) { resBox.innerHTML = "API ERROR"; }
+        }
+
+        async function adminAction() {
+            const pass = document.getElementById('adm-pw').value;
+            try {
+                const res = await fetch('/api/admin', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'login', password: pass}) });
+                const d = await res.json();
+                if(d.status === 'success') {
+                    document.getElementById('admin-login-sec').classList.add('hidden');
+                    document.getElementById('admin-config-sec').classList.remove('hidden');
+                    if(d.duration) document.getElementById('current-global-time').innerText = d.duration;
+                } else msg("WRONG PASSKEY!");
+            } catch(e) { msg("AUTH ERROR"); }
+        }
+
+        socket.on('new_log', (m) => {
+            const currentBot = localStorage.getItem('bot_name') || currentSessionUser;
+            if (m.user === currentBot) {
+                const l = document.getElementById('logs'), d = document.createElement('div');
+                d.className = "mb-1 text-gray-400 border-l-2 border-orange-500/30 pl-2";
+                d.innerText = `[${new Date().toLocaleTimeString()}] ${m.data}`;
+                l.appendChild(d); l.scrollTop = l.scrollHeight;
+            }
+        });
+
+        window.onload = () => {
+            document.getElementById('name').value = localStorage.getItem('bot_name') || "";
+            document.getElementById('uid').value = localStorage.getItem('bot_uid') || "";
+            document.getElementById('pw').value = localStorage.getItem('bot_pw') || "";
+            // Check status on load
+            fetch('/api/check_status', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name: localStorage.getItem('bot_name') || currentSessionUser})
+            }).then(r => r.json()).then(d => { if(d.running) updateStat(true, d.rem_sec); });
+        };
+    </script>
+</body>
+</html>
